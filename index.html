@@ -77,6 +77,25 @@
     background: #f6fbf7;
   }
   .api-key-inner { padding: 16px 20px; }
+  .api-key-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    cursor: default;
+  }
+  .api-edit-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #7aaa8a;
+    background: none;
+    border: 1px solid #7aaa8a;
+    border-radius: 4px;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  .api-edit-btn:hover { opacity: .7; }
   .api-key-label {
     font-family: 'DM Mono', monospace;
     font-size: 11px;
@@ -333,7 +352,13 @@
 </div>
 
 <div class="api-key-section" id="apiKeySection">
-  <div class="api-key-inner">
+  <!-- 저장된 상태: 접힌 뷰 -->
+  <div class="api-key-collapsed" id="apiKeyCollapsed" style="display:none">
+    <span class="api-key-label" style="margin:0">🔑 API 키 저장됨 ✓</span>
+    <button class="api-edit-btn" onclick="openApiKey()">수정</button>
+  </div>
+  <!-- 입력 폼 -->
+  <div class="api-key-inner" id="apiKeyForm">
     <div class="api-key-label">🔑 Anthropic API 키</div>
     <div class="api-key-row">
       <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." 
@@ -517,6 +542,9 @@
 </div>
 
 <script>
+// 어휘 분석 - Vercel 프록시 경유 (http→https Mixed Content 해결)
+const VOCAB_PROXY = '/api/analyze-vocab';
+
 // API 키 관리
 function getApiKey() {
   return localStorage.getItem('anthropic_api_key') || '';
@@ -540,21 +568,27 @@ const SAMPLE = `운영자: 안녕하세요! 오늘 읽어오신 책에 대해 �
 // API 키 UI 초기화
 function initApiKeySection() {
   const key = getApiKey();
-  const section = document.getElementById('apiKeySection');
-  const input = document.getElementById('apiKeyInput');
   if (key) {
-    input.value = key;
-    section.classList.add('saved');
-    section.querySelector('.api-key-label').textContent = '🔑 API 키 저장됨 ✓';
+    document.getElementById('apiKeyInput').value = key;
+    collapseApiKey();
   }
 }
 
+function collapseApiKey() {
+  document.getElementById('apiKeyForm').style.display = 'none';
+  document.getElementById('apiKeyCollapsed').style.display = 'flex';
+  document.getElementById('apiKeySection').classList.add('saved');
+}
+
+function openApiKey() {
+  document.getElementById('apiKeyForm').style.display = 'block';
+  document.getElementById('apiKeyCollapsed').style.display = 'none';
+  document.getElementById('apiKeySection').classList.remove('saved');
+  document.getElementById('apiKeyInput').focus();
+}
+
 function onApiKeyInput(val) {
-  const section = document.getElementById('apiKeySection');
-  if (section.classList.contains('saved') && !val) {
-    section.classList.remove('saved');
-    section.querySelector('.api-key-label').textContent = '🔑 Anthropic API 키';
-  }
+  // 입력 중엔 저장 상태 표시 없음 (저장 버튼 누를 때 처리)
 }
 
 function saveApiKeyAndClose() {
@@ -564,9 +598,7 @@ function saveApiKeyAndClose() {
     return;
   }
   saveApiKey(val);
-  const section = document.getElementById('apiKeySection');
-  section.classList.add('saved');
-  section.querySelector('.api-key-label').textContent = '🔑 API 키 저장됨 ✓';
+  collapseApiKey();
 }
 
 window.addEventListener('DOMContentLoaded', initApiKeySection);
@@ -750,9 +782,20 @@ async function analyze() {
     setLoadingText('Claude가 대화 내용을 분석하고 있습니다...');
     const ai = await callClaude(text, name, book);
 
-    // 어휘 등급 분석 (서버 없이 클라이언트 측 기본 분석)
-    setLoadingText('어휘를 분석하고 있습니다...');
+    // 어휘 등급 분석 (AWS 서버 kiwipiepy)
+    setLoadingText('어휘 등급을 분석하고 있습니다...');
     let vocab = null;
+    try {
+      const vocabRes = await fetch(VOCAB_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: authorLines.join(' ') })
+      });
+      if (vocabRes.ok) vocab = await vocabRes.json();
+      else console.warn('어휘 서버 응답 오류:', vocabRes.status);
+    } catch(e) {
+      console.warn('어휘 서버 연결 실패 (분석은 계속 진행):', e.message);
+    }
 
     document.getElementById('res-name').textContent = name;
     document.getElementById('res-meta').textContent = `『${book}』`;
