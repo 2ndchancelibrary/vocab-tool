@@ -855,6 +855,7 @@ async function analyze() {
       document.getElementById('vocab-section').style.display = 'none';
       document.getElementById('vocab-unavail').style.display = 'block';
     }
+    setBar('b1', 'bn1', ai.scores.interpretation);
     setBar('b2', 'bn2', ai.scores.personal_connection);
     setBar('b3', 'bn3', ai.scores.vocabulary);
     setBar('b4', 'bn4', ai.scores.response_fidelity);
